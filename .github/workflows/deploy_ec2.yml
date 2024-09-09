@@ -114,8 +114,7 @@ jobs:
           scp -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no 00_ec2/ec2_user_data.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
 
           # Ejecutar el script en la instancia
-          ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/ec2_user_data.sh && sudo /home/ubuntu/ec2_user_data.sh'
-
+          #ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/ec2_user_data.sh && sudo /home/ubuntu/ec2_user_data.sh'
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2
