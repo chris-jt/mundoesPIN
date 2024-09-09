@@ -113,21 +113,20 @@ jobs:
   
           echo "IP pública de la instancia: $PUBLIC_IP"
 
-    - name: Save Key Pair
-      if: env.KEY_CREATED == 'true'
+    - name: Prepare Key Pair Information
       run: |
           mkdir -p ${{ github.workspace }}/artifacts
-          mv jenkins.pem ${{ github.workspace }}/artifacts/
+          if [ "${{ env.KEY_CREATED }}" = "true" ]; then
+            mv jenkins.pem ${{ github.workspace }}/artifacts/
+            echo "New key pair 'jenkins' was created. The private key is included in this artifact." > ${{ github.workspace }}/artifacts/README.txt
+          else
+            echo "The key pair 'jenkins' already existed. No new .pem file was created." > ${{ github.workspace }}/artifacts/README.txt
+            echo "If you need the private key, you'll need to use the original key or create a new one manually." >> ${{ github.workspace }}/artifacts/README.txt
+          fi
+          echo "Public IP of the instance: ${{ env.PUBLIC_IP }}" >> ${{ github.workspace }}/artifacts/README.txt
           
-    - name: Upload Key Pair
-      if: env.KEY_CREATED == 'true'
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v2
       with:
-        name: jenkins-key-pair
-        path: ${{ github.workspace }}/artifacts/jenkins.pem
-    
-    - name: Key Pair Information
-      if: env.KEY_CREATED == 'false'
-      run: |
-          echo "The key pair 'jenkins' already existed and no new .pem file was created."
-          echo "If you need the private key, you'll need to use the original key or create a new one manually."
+          name: jenkins-instance-info
+          path: ${{ github.workspace }}/artifacts/
