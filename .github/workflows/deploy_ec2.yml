@@ -94,18 +94,40 @@ jobs:
   
           echo "La instancia EC2 está en ejecución"
   
+           # Crear Key Pair (si no existe)
+          KEY_CREATED=false
+          if ! aws ec2 describe-key-pairs --key-names $KEY_NAME >/dev/null 2>&1; then
+            aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > ${KEY_NAME}.pem
+            chmod 400 ${KEY_NAME}.pem
+            KEY_CREATED=true
+            echo "New key pair $KEY_NAME created"
+          else
+            echo "Key pair $KEY_NAME already exists"
+          fi
+
+          # Guardar información sobre la creación de la clave
+          echo "KEY_CREATED=$KEY_CREATED" >> $GITHUB_ENV
+
           # Obtener la IP pública de la instancia
           PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
   
           echo "IP pública de la instancia: $PUBLIC_IP"
 
     - name: Save Key Pair
+      if: env.KEY_CREATED == 'true'
       run: |
-        mkdir -p ${{ github.workspace }}/artifacts
-        mv jenkins.pem ${{ github.workspace }}/artifacts/
-      
+          mkdir -p ${{ github.workspace }}/artifacts
+          mv jenkins.pem ${{ github.workspace }}/artifacts/
+          
     - name: Upload Key Pair
+      if: env.KEY_CREATED == 'true'
       uses: actions/upload-artifact@v2
       with:
         name: jenkins-key-pair
         path: ${{ github.workspace }}/artifacts/jenkins.pem
+    
+    - name: Key Pair Information
+      if: env.KEY_CREATED == 'false'
+      run: |
+          echo "The key pair 'jenkins' already existed and no new .pem file was created."
+          echo "If you need the private key, you'll need to use the original key or create a new one manually."
