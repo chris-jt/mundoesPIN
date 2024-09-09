@@ -32,13 +32,16 @@ jobs:
           INSTANCE_PROFILE_NAME="ec2-admin-profile"
   
           # Crear Key Pair (si no existe)
+          KEY_CREATED=false
           if ! aws ec2 describe-key-pairs --key-names $KEY_NAME >/dev/null 2>&1; then
             aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > ${KEY_NAME}.pem
             chmod 400 ${KEY_NAME}.pem
+            KEY_CREATED=true
+            echo "New key pair $KEY_NAME created"
           else
             echo "Key pair $KEY_NAME already exists"
           fi
-  
+
           # Crear Security Group (si no existe)
           if ! aws ec2 describe-security-groups --group-names $SECURITY_GROUP_NAME >/dev/null 2>&1; then
             SECURITY_GROUP_ID=$(aws ec2 create-security-group --group-name $SECURITY_GROUP_NAME --description "Security group for Jenkins" --query 'GroupId' --output text)
@@ -94,17 +97,6 @@ jobs:
   
           echo "La instancia EC2 está en ejecución"
   
-           # Crear Key Pair (si no existe)
-          KEY_CREATED=false
-          if ! aws ec2 describe-key-pairs --key-names $KEY_NAME >/dev/null 2>&1; then
-            aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > ${KEY_NAME}.pem
-            chmod 400 ${KEY_NAME}.pem
-            KEY_CREATED=true
-            echo "New key pair $KEY_NAME created"
-          else
-            echo "Key pair $KEY_NAME already exists"
-          fi
-
           # Guardar información sobre la creación de la clave
           echo "KEY_CREATED=$KEY_CREATED" >> $GITHUB_ENV
 
