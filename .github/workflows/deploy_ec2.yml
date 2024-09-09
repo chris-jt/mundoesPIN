@@ -78,9 +78,6 @@ jobs:
             echo "Instance Profile $INSTANCE_PROFILE_NAME already exists"
           fi
   
-          # Leer el contenido del archivo ec2_user_data.sh
-          USER_DATA=$(base64 -w 0 00_ec2/ec2_user_data.sh)
-  
           # Lanzar instancia EC2
           INSTANCE_ID=$(aws ec2 run-instances \
               --image-id $AMI_ID \
@@ -109,6 +106,15 @@ jobs:
   
           echo "IP pública de la instancia: $PUBLIC_IP"
           echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
+
+          # Esperar un poco más para asegurarnos de que la instancia está completamente inicializada
+          sleep 30
+
+          # Copiar el script ec2_user_data.sh a la instancia
+          scp -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no 00_ec2/ec2_user_data.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
+
+          # Ejecutar el script en la instancia
+          ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/ec2_user_data.sh && sudo /home/ubuntu/ec2_user_data.sh'
 
 
     - name: Upload Artifacts
