@@ -72,7 +72,7 @@ jobs:
           fi
   
           # Leer el contenido del archivo ec2_user_data.sh
-          USER_DATA=$(base64 -w 0 ec2_user_data.sh)
+          USER_DATA=$(base64 -w 0 00_ec2/ec2_user_data.sh)
   
           # Lanzar instancia EC2
           INSTANCE_ID=$(aws ec2 run-instances \
