@@ -22,59 +22,82 @@ jobs:
 
     - name: Deploy EC2 instance
       run: |
-        # Definir variables
-        REGION="us-east-1"
-        AMI_ID=$(aws ec2 describe-images --owners 099720109477 --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*" "Name=state,Values=available" --query "Images[0].ImageId" --output text --region $REGION)
-        INSTANCE_TYPE="t2.small"
-        KEY_NAME="jenkins"
-        SECURITY_GROUP_NAME="jenkins-sg"
-        ROLE_NAME="ec2-admin-role"
-        INSTANCE_PROFILE_NAME="ec2-admin-profile"
-
-        # Crear Key Pair
-        aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > ${KEY_NAME}.pem
-        chmod 400 ${KEY_NAME}.pem
-
-        # Crear Security Group
-        SECURITY_GROUP_ID=$(aws ec2 create-security-group --group-name $SECURITY_GROUP_NAME --description "Security group for Jenkins" --query 'GroupId' --output text)
-
-        # Configurar reglas de Security Group
-        aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
-        aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0
-
-        # Crear IAM Role
-        aws iam create-role --role-name $ROLE_NAME --assume-role-policy-document '{"Version": "2012-10-17","Statement": [{"Effect": "Allow","Principal": {"Service": "ec2.amazonaws.com"},"Action": "sts:AssumeRole"}]}'
-        aws iam attach-role-policy --role-name $ROLE_NAME --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
-        aws iam create-instance-profile --instance-profile-name $INSTANCE_PROFILE_NAME
-        aws iam add-role-to-instance-profile --role-name $ROLE_NAME --instance-profile-name $INSTANCE_PROFILE_NAME
-
-        # Leer el contenido del archivo ec2_user_data.sh
-        USER_DATA=$(base64 -w 0 00_ec2/ec2_user_data.sh)
-
-        # Lanzar instancia EC2
-        INSTANCE_ID=$(aws ec2 run-instances \
-            --image-id $AMI_ID \
-            --instance-type $INSTANCE_TYPE \
-            --key-name $KEY_NAME \
-            --security-group-ids $SECURITY_GROUP_ID \
-            --user-data $USER_DATA \
-            --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":8,"VolumeType":"gp2"}}]' \
-            --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Jenkins}]' \
-            --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
-            --query 'Instances[0].InstanceId' \
-            --output text)
-
-        echo "Instancia EC2 creada con ID: $INSTANCE_ID"
-
-        # Esperar a que la instancia esté en estado 'running'
-        aws ec2 wait instance-running --instance-ids $INSTANCE_ID
-
-        echo "La instancia EC2 está en ejecución"
-
-        # Obtener la IP pública de la instancia
-        PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
-
-        echo "IP pública de la instancia: $PUBLIC_IP"
+          # Definir variables
+          REGION="us-east-1"
+          AMI_ID=$(aws ec2 describe-images --owners 099720109477 --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*" "Name=state,Values=available" --query "Images[0].ImageId" --output text --region $REGION)
+          INSTANCE_TYPE="t2.small"
+          KEY_NAME="jenkins"
+          SECURITY_GROUP_NAME="jenkins-sg"
+          ROLE_NAME="ec2-admin-role"
+          INSTANCE_PROFILE_NAME="ec2-admin-profile"
+  
+          # Crear Key Pair (si no existe)
+          if ! aws ec2 describe-key-pairs --key-names $KEY_NAME >/dev/null 2>&1; then
+            aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > ${KEY_NAME}.pem
+            chmod 400 ${KEY_NAME}.pem
+          else
+            echo "Key pair $KEY_NAME already exists"
+          fi
+  
+          # Crear Security Group (si no existe)
+          if ! aws ec2 describe-security-groups --group-names $SECURITY_GROUP_NAME >/dev/null 2>&1; then
+            SECURITY_GROUP_ID=$(aws ec2 create-security-group --group-name $SECURITY_GROUP_NAME --description "Security group for Jenkins" --query 'GroupId' --output text)
+            
+            # Configurar reglas de Security Group
+            aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
+            aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0
+          else
+            SECURITY_GROUP_ID=$(aws ec2 describe-security-groups --group-names $SECURITY_GROUP_NAME --query 'SecurityGroups[0].GroupId' --output text)
+            echo "Security group $SECURITY_GROUP_NAME already exists with ID $SECURITY_GROUP_ID"
+          fi
+  
+          # Crear IAM Role (si no existe)
+          if ! aws iam get-role --role-name $ROLE_NAME >/dev/null 2>&1; then
+            aws iam create-role --role-name $ROLE_NAME --assume-role-policy-document '{"Version": "2012-10-17","Statement": [{"Effect": "Allow","Principal": {"Service": "ec2.amazonaws.com"},"Action": "sts:AssumeRole"}]}'
+            aws iam attach-role-policy --role-name $ROLE_NAME --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+          else
+            echo "IAM Role $ROLE_NAME already exists"
+          fi
+  
+          # Crear Instance Profile (si no existe)
+          if ! aws iam get-instance-profile --instance-profile-name $INSTANCE_PROFILE_NAME >/dev/null 2>&1; then
+            aws iam create-instance-profile --instance-profile-name $INSTANCE_PROFILE_NAME
+            aws iam add-role-to-instance-profile --role-name $ROLE_NAME --instance-profile-name $INSTANCE_PROFILE_NAME
+            
+            # Esperar a que el perfil de instancia esté disponible
+            echo "Waiting for instance profile to be ready..."
+            sleep 10
+          else
+            echo "Instance Profile $INSTANCE_PROFILE_NAME already exists"
+          fi
+  
+          # Leer el contenido del archivo ec2_user_data.sh
+          USER_DATA=$(base64 -w 0 ec2_user_data.sh)
+  
+          # Lanzar instancia EC2
+          INSTANCE_ID=$(aws ec2 run-instances \
+              --image-id $AMI_ID \
+              --instance-type $INSTANCE_TYPE \
+              --key-name $KEY_NAME \
+              --security-group-ids $SECURITY_GROUP_ID \
+              --user-data $USER_DATA \
+              --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":8,"VolumeType":"gp2"}}]' \
+              --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Jenkins}]' \
+              --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
+              --query 'Instances[0].InstanceId' \
+              --output text)
+  
+          echo "Instancia EC2 creada con ID: $INSTANCE_ID"
+  
+          # Esperar a que la instancia esté en estado 'running'
+          aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+  
+          echo "La instancia EC2 está en ejecución"
+  
+          # Obtener la IP pública de la instancia
+          PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+  
+          echo "IP pública de la instancia: $PUBLIC_IP"
 
     - name: Save Key Pair
       run: |
