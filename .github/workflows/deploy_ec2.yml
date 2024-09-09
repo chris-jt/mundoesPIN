@@ -104,19 +104,23 @@ jobs:
           PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
   
           echo "IP pública de la instancia: $PUBLIC_IP"
+          echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
 
     - name: Prepare Key Pair Information
       run: |
           mkdir -p ${{ github.workspace }}/artifacts
-          if [ "${{ env.KEY_CREATED }}" = "true" ]; then
+          if [ "KEY_CREATED" = "true" ]; then
             mv jenkins.pem ${{ github.workspace }}/artifacts/
             echo "New key pair 'jenkins' was created. The private key is included in this artifact." > ${{ github.workspace }}/artifacts/README.txt
           else
             echo "The key pair 'jenkins' already existed. No new .pem file was created." > ${{ github.workspace }}/artifacts/README.txt
             echo "If you need the private key, you'll need to use the original key or create a new one manually." >> ${{ github.workspace }}/artifacts/README.txt
           fi
-          echo "Public IP of the instance: ${{ env.PUBLIC_IP }}" >> ${{ github.workspace }}/artifacts/README.txt
-          
+          echo "Public IP of the instance: PUBLIC_IP" >> ${{ github.workspace }}/artifacts/README.txt
+      env:
+        KEY_CREATED: ${{ env.KEY_CREATED }}
+        PUBLIC_IP: ${{ env.PUBLIC_IP }}
+
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2
       with:
