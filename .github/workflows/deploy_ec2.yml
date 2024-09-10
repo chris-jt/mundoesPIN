@@ -34,16 +34,24 @@ jobs:
           ROLE_NAME="ec2-admin-role"
           INSTANCE_PROFILE_NAME="ec2-admin-profile"
   
+          # Verificar existencia del archivo de datos de usuario
+          if [ ! -f "00_ec2/ec2_user_data.sh" ]; then
+            echo "Error: ec2_user_data.sh not found"
+            exit 1
+          fi
+
           # Crear Key Pair (si no existe)
           if ! aws ec2 describe-key-pairs --key-names $KEY_NAME >/dev/null 2>&1; then
-            aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > ${KEY_NAME}.pem
-            chmod 400 ${KEY_NAME}.pem
-            mkdir -p ${{ github.workspace }}/artifacts
-            mv ${KEY_NAME}.pem ${{ github.workspace }}/artifacts/
-            echo "New key pair 'jenkins' was created. The private key is included in this artifact." > ${{ github.workspace }}/artifacts/README.txt
+            aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > $GITHUB_WORKSPACE/${KEY_NAME}.pem
+            chmod 400 $GITHUB_WORKSPACE/${KEY_NAME}.pem
+            mkdir -p $GITHUB_WORKSPACE/artifacts
+            cp $GITHUB_WORKSPACE/${KEY_NAME}.pem $GITHUB_WORKSPACE/artifacts/
+            echo "New key pair 'jenkins' was created. The private key is included in this artifact." > $GITHUB_WORKSPACE/artifacts/README.txt
             echo "New key pair $KEY_NAME created"
+            KEY_CREATED=true
           else
             echo "Key pair $KEY_NAME already exists"
+            KEY_CREATED=false
           fi
 
           # Crear Security Group (si no existe)
@@ -107,15 +115,22 @@ jobs:
           echo "IP pública de la instancia: $PUBLIC_IP"
           echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
 
-          # Esperar un poco más para asegurarnos de que la instancia está completamente inicializada
-          sleep 30
+          echo "Esperando que la instancia se inicialice completamente..."
+          sleep 120
 
-          # Copiar el script ec2_user_data.sh a la instancia
-          scp -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no 00_ec2/ec2_user_data.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
+          if [ "$KEY_CREATED" = true ]; then
+            # Asegurar que la clave tenga los permisos correctos
+            chmod 400 $GITHUB_WORKSPACE/${KEY_NAME}.pem
+            
+            # Copiar el script ec2_user_data.sh a la instancia
+            scp -i $GITHUB_WORKSPACE/${KEY_NAME}.pem -o StrictHostKeyChecking=no 00_ec2/ec2_user_data.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
 
-          # Ejecutar el script en la instancia
-          #ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/ec2_user_data.sh && sudo /home/ubuntu/ec2_user_data.sh'
-
+            # Ejecutar el script en la instancia
+            ssh -i $GITHUB_WORKSPACE/${KEY_NAME}.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/ec2_user_data.sh && sudo /home/ubuntu/ec2_user_data.sh'
+          else
+            echo "Clave no creada en este run. No se puede conectar a la instancia."
+          fi
+          
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
