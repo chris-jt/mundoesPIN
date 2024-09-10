@@ -84,7 +84,7 @@ jobs:
               --instance-type $INSTANCE_TYPE \
               --key-name $KEY_NAME \
               --security-group-ids $SECURITY_GROUP_ID \
-              --user-data $USER_DATA \
+              #--user-data $USER_DATA \
               --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":8,"VolumeType":"gp2"}}]' \
               --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Jenkins}]' \
               --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
