@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "Installing Unzip"
-sudo yum install unzip
+sudo apt install unzip
 unzip -v
 
 echo "Installing AWS CLI"
@@ -25,7 +25,7 @@ echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
 eksctl version
 
 echo "Installing docker"
-sudo yum install -y docker
+sudo apt install -y docker
 sudo usermod -a -G docker ec2-user
 newgrp docker
 wget https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) 
@@ -34,16 +34,11 @@ sudo chmod -v +x /usr/local/bin/docker-compose
 sudo systemctl enable docker.service
 sudo systemctl start docker.service
 
-
 echo "Installing Helm"
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
 chmod 700 get_helm.sh
 ./get_helm.sh
 helm version
 
-echo "Installing terraform "
-sudo yum install -y yum-utils
-sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
-sudo yum install -y terraform
 
 
