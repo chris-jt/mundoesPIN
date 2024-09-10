@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "Installing Unzip"
-sudo apt install unzip
+sudo yum install unzip
 unzip -v
 
 echo "Installing AWS CLI"
