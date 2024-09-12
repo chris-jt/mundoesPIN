@@ -1,4 +1,4 @@
-name: Deploy EC2 EKS y Nginx
+name: Deploy EC2, EKS y Nginx
 
 on:
   #push:
