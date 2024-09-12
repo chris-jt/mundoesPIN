@@ -3,6 +3,10 @@ echo "Installing Unzip"
 sudo apt install unzip
 unzip -v
 
+# Actualizar e instalar dependencias
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+
 echo "Installing AWS CLI"
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
@@ -41,6 +45,12 @@ curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bas
 chmod 700 get_helm.sh
 ./get_helm.sh
 helm version
+
+# Instalar Prometheus y Grafana (opcional, para monitoreo)
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+echo "Todas las herramientas necesarias han sido instaladas."
 
 
 

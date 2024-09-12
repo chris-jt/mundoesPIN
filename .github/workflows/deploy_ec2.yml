@@ -1,4 +1,4 @@
-name: Deploy EC2 Instance
+name: Deploy EC2 EKS y Nginx
 
 on:
   #push:
@@ -6,8 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-ec2:
     runs-on: ubuntu-latest
+    outputs:
+      public_ip: ${{ steps.get_ip.outputs.public_ip }}
+      key_created: ${{ steps.create_instance.outputs.key_created }}
     
     steps:
     - name: Checkout code
@@ -130,9 +133,97 @@ jobs:
           else
             echo "Clave no creada en este run. No se puede conectar a la instancia."
           fi
-          
-    - name: Upload Artifacts
+
+    - name: Get EC2 Public IP
+      id: get_ip
+      run: |
+            PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+            echo "public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+
+    - name: Upload Key Pair
+      if: steps.create_instance.outputs.key_created == 'true'
       uses: actions/upload-artifact@v4
       with:
-          name: jenkins-instance-info
-          path: ${{ github.workspace }}/artifacts/
+        name: ec2-key-pair
+        path: ${{ github.workspace }}/jenkins.pem
+
+  setup-ec2:
+    needs: deploy-ec2
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Key Pair
+      uses: actions/download-artifact@v4
+      with:
+        name: ec2-key-pair
+      
+    - name: Setup EC2 Instance
+      env:
+        PUBLIC_IP: ${{ needs.deploy-ec2.outputs.public_ip }}
+      run: |
+          chmod 400 jenkins.pem
+          scp -i jenkins.pem -o StrictHostKeyChecking=no 00_ec2/ec2_user_data.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
+          ssh -i jenkins.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/ec2_user_data.sh && sudo /home/ubuntu/ec2_user_data.sh'
+
+  create-eks-cluster:
+    needs: [deploy-ec2, setup-ec2]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Download Key Pair
+      uses: actions/download-artifact@v4
+      with:
+        name: ec2-key-pair
+        
+    - name: Create EKS Cluster
+      env:
+        PUBLIC_IP: ${{ needs.deploy-ec2.outputs.public_ip }}
+      run: |
+          chmod 400 jenkins.pem
+          scp -i jenkins.pem -o StrictHostKeyChecking=no 01_eksctl/create_eks_cluster.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
+          ssh -i jenkins.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/create_eks_cluster.sh && sudo /home/ubuntu/create_eks_cluster.sh'
+
+  deploy-nginx:
+    needs: create-eks-cluster
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Download Key Pair
+      uses: actions/download-artifact@v4
+      with:
+        name: ec2-key-pair
+        
+    - name: Deploy Nginx
+      env:
+        PUBLIC_IP: ${{ needs.deploy-ec2.outputs.public_ip }}
+      run: |
+          chmod 400 jenkins.pem
+          scp -i jenkins.pem -o StrictHostKeyChecking=no 01_eksctl/deploy_nginx.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
+          ssh -i jenkins.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/deploy_nginx.sh && sudo /home/ubuntu/deploy_nginx.sh'          
+
+  setup-monitoring:
+    needs: deploy-nginx
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Download Key Pair
+      uses: actions/download-artifact@v4
+      with:
+        name: ec2-key-pair
+        
+    - name: Setup Monitoring
+      env:
+        PUBLIC_IP: ${{ needs.deploy-ec2.outputs.public_ip }}
+      run: |
+          chmod 400 jenkins.pem
+          scp -i jenkins.pem -o StrictHostKeyChecking=no 01_eksctl/setup_monitoring.sh ubuntu@$PUBLIC_IP:/home/ubuntu/
+          ssh -i jenkins.pem -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP 'chmod +x /home/ubuntu/setup_monitoring.sh && sudo /home/ubuntu/setup_monitoring.sh'
+
